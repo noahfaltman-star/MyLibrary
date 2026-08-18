@@ -26,6 +26,7 @@ public class LibraryService {
     // LÅNTAGAREN
     // ==========================================
 
+    // Hämtar alla böcker med kopplade författare och kategorier
     public List<BookDTO> getAllBooksDTO() {
         String sql = """
             SELECT b.id, b.title, b.isbn, b.year_published, b.available_copies,
@@ -44,12 +45,14 @@ public class LibraryService {
                 .toList();
     }
 
+    // Filtrerar fram böcker som finns inne på lager
     public List<BookDTO> getAvailableBooks() {
         return getAllBooksDTO().stream()
                 .filter(book -> book.availableCopies() > 0)
                 .toList();
     }
 
+    // Söker böcker på titel/författare samt filtrerar på kategori via Streams
     public List<BookDTO> searchAndFilterBooks(String query, String category) {
         return getAllBooksDTO().stream()
                 .filter(b -> query.isBlank() ||
@@ -60,6 +63,7 @@ public class LibraryService {
                 .toList();
     }
 
+    // Skapar ett lån och minskar bokens lagersaldo
     @Transactional
     public boolean borrowBook(int bookId, int memberId) {
         int updated = jdbc.update(
@@ -78,6 +82,7 @@ public class LibraryService {
         return true;
     }
 
+    // Återlämnar ett aktivt lån och ökar bokens lagersaldo
     @Transactional
     public boolean returnBook(int bookId, int memberId) {
         String findLoanSql = "SELECT id FROM loans WHERE book_id = ? AND member_id = ? AND return_date IS NULL";
@@ -93,6 +98,7 @@ public class LibraryService {
         return true;
     }
 
+    // Förlänger återlämningsdatumet för ett specifikt lån
     public boolean extendLoan(int bookId, int memberId, int extraDays) {
         String sql = """
             UPDATE loans 
@@ -103,6 +109,7 @@ public class LibraryService {
         return rowsAffected > 0;
     }
 
+    // Hämtar en medlems profiluppgifter via medlems-ID
     public Optional<MemberDTO> getMemberProfile(int memberId) {
         String sql = "SELECT * FROM members WHERE id = ?";
         List<MemberDTO> members = jdbc.query(sql, (rs, rowNum) -> new MemberDTO(
@@ -119,6 +126,7 @@ public class LibraryService {
         return members.stream().findFirst();
     }
 
+    // Hämtar alla lån för en medlem
     public List<LoanDTO> getMemberLoans(int memberId) {
         String sql = """
         SELECT l.id, l.book_id, b.title AS book_title, l.member_id,
@@ -134,6 +142,7 @@ public class LibraryService {
                 .toList();
     }
 
+    // Hämtar enbart aktiva (ej återlämnade) lån för en medlem
     public List<LoanDTO> getActiveMemberLoans(int memberId) {
         String sql = """
         SELECT l.id, l.book_id, b.title AS book_title, l.member_id,
@@ -149,6 +158,7 @@ public class LibraryService {
                 .toList();
     }
 
+    // Uppdaterar namn och e-post för en medlem
     public boolean updateMemberProfile(int memberId, String firstName, String lastName, String email) {
         String sql = "UPDATE members SET first_name = ?, last_name = ?, email = ? WHERE id = ?";
         return jdbc.update(sql, firstName, lastName, email, memberId) > 0;
@@ -158,6 +168,7 @@ public class LibraryService {
     // BIBLIOTEKARIE
     // ==========================================
 
+    // Skapar en ny medlem och returnerar dess genererade ID
     @Transactional
     public Optional<Integer> createMember(String firstName, String lastName, String email) {
         String sql = "INSERT INTO members (first_name, last_name, email, membership_date, membership_type, status) VALUES (?, ?, ?, ?, 'standard', 'active')";
@@ -170,6 +181,7 @@ public class LibraryService {
         return Optional.empty();
     }
 
+    // Hämtar alla pågående lån i hela biblioteket
     public List<LoanDTO> getAllActiveLoans() {
         String sql = """
             SELECT l.id, l.book_id, b.title AS book_title, l.member_id,
@@ -185,10 +197,10 @@ public class LibraryService {
                 .toList();
     }
 
+    // Registrerar en ny bok och kopplar eventuell författare och kategori
     @Transactional
     public boolean addBook(String title, String isbn, int year, int copies, int authorId, int categoryId) {
         String sql = "INSERT INTO books (title, isbn, year_published, total_copies, available_copies) VALUES (?, ?, ?, ?, ?)";
-        // Sätter titel, isbn, år, total_copies och available_copies
         int rows = jdbc.update(sql, title, isbn, year, copies, copies);
         if (rows == 0) return false;
 
@@ -201,14 +213,17 @@ public class LibraryService {
         return false;
     }
 
+    // Redigerar titel och publiceringsår på en bok
     public boolean editBook(int bookId, String title, int year) {
         return jdbc.update("UPDATE books SET title = ?, year_published = ? WHERE id = ?", title, year, bookId) > 0;
     }
 
+    // Raderar en bok ur systemet
     public boolean deleteBook(int bookId) {
         return jdbc.update("DELETE FROM books WHERE id = ?", bookId) > 0;
     }
 
+    // Skapar en ny författare och returnerar dess genererade ID
     @Transactional
     public Optional<Integer> addAuthor(String firstName, String lastName, String nationality) {
         String sql = "INSERT INTO authors (first_name, last_name, nationality) VALUES (?, ?, ?)";
@@ -221,11 +236,13 @@ public class LibraryService {
         return Optional.empty();
     }
 
+    // Uppdaterar uppgifter för en författare
     public boolean editAuthor(int authorId, String firstName, String lastName, String nationality) {
         return jdbc.update("UPDATE authors SET first_name = ?, last_name = ?, nationality = ? WHERE id = ?",
                 firstName, lastName, nationality, authorId) > 0;
     }
 
+    // Kopplar en befintlig bok till en befintlig kategori
     public boolean linkBookToCategory(int bookId, int categoryId) {
         return jdbc.update("INSERT IGNORE INTO book_categories (book_id, category_id) VALUES (?, ?)", bookId, categoryId) > 0;
     }
@@ -233,6 +250,8 @@ public class LibraryService {
     // ==========================================
     // MAPPERS
     // ==========================================
+
+    // Omvandlar en databasrad från MySQL till ett BookDTO-objekt
     private BookDTO mapToBookDTO(Map<String, Object> row) {
         return new BookDTO(
                 ((Number) row.get("id")).intValue(),
@@ -245,6 +264,7 @@ public class LibraryService {
         );
     }
 
+    // Omvandlar en databasrad från MySQL till ett LoanDTO-objekt med förseningskontroll
     private LoanDTO mapToLoanDTO(Map<String, Object> row) {
         LocalDate dueDate = ((Date) row.get("due_date")).toLocalDate();
         LocalDate returnDate = row.get("return_date") != null ? ((Date) row.get("return_date")).toLocalDate() : null;

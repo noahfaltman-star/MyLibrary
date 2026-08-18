@@ -19,6 +19,7 @@ public class LibraryMenu implements CommandLineRunner {
         this.libraryService = libraryService;
     }
 
+    // Startpunkt som kör igång konsolapplikationen via Spring Boot
     @Override
     public void run(String... args) {
         while (true) {
@@ -45,6 +46,7 @@ public class LibraryMenu implements CommandLineRunner {
         }
     }
 
+    // Menystyrning och val för låntagare
     private void borrowerMenu() {
         while (true) {
             System.out.println("""
@@ -62,7 +64,10 @@ public class LibraryMenu implements CommandLineRunner {
             String choice = scanner.nextLine().trim();
 
             switch (choice) {
+                // Listar alla böcker som finns inne
                 case "1" -> printBooks(libraryService.getAvailableBooks());
+
+                // Söker böcker via text och kategorifilter
                 case "2" -> {
                     System.out.print("Sökord (titel/författare, eller Enter): ");
                     String q = scanner.nextLine().trim();
@@ -70,6 +75,8 @@ public class LibraryMenu implements CommandLineRunner {
                     String cat = scanner.nextLine().trim();
                     printBooks(libraryService.searchAndFilterBooks(q, cat));
                 }
+
+                // Registrerar ett nytt lån för medlemmen
                 case "3" -> {
                     System.out.print("Ditt Medlems-ID: ");
                     int mId = Integer.parseInt(scanner.nextLine().trim());
@@ -78,6 +85,8 @@ public class LibraryMenu implements CommandLineRunner {
                     if (libraryService.borrowBook(bId, mId)) System.out.println("✅ Boken har lånats!");
                     else System.out.println("❌ Boken är slut i lager eller felaktigt ID.");
                 }
+
+                // Lämnar tillbaka ett aktivt lån
                 case "4" -> {
                     System.out.print("Ditt Medlems-ID: ");
                     int mId = Integer.parseInt(scanner.nextLine().trim());
@@ -86,6 +95,8 @@ public class LibraryMenu implements CommandLineRunner {
                     if (libraryService.returnBook(bId, mId)) System.out.println("✅ Boken är återlämnad!");
                     else System.out.println("❌ Kunde inte återlämna (inget aktivt lån på denna bok hittades).");
                 }
+
+                // Förlänger lånetiden för en lånad bok
                 case "5" -> {
                     System.out.print("Ditt Medlems-ID: ");
                     int mId = Integer.parseInt(scanner.nextLine().trim());
@@ -94,6 +105,8 @@ public class LibraryMenu implements CommandLineRunner {
                     if (libraryService.extendLoan(bId, mId, 14)) System.out.println("✅ Lånet förlängdes med 14 dagar!");
                     else System.out.println("❌ Kunde inte förlänga (aktivt lån saknas).");
                 }
+
+                // Visar medlemmens personuppgifter och pågående lån
                 case "6" -> {
                     System.out.print("Ditt Medlems-ID: ");
                     int mId = Integer.parseInt(scanner.nextLine().trim());
@@ -106,6 +119,8 @@ public class LibraryMenu implements CommandLineRunner {
                         libraryService.getActiveMemberLoans(currentMemberId).forEach(this::printLoan);
                     }, () -> System.out.println("Medlem hittades inte."));
                 }
+
+                // Uppdaterar medlemmens personuppgifter
                 case "7" -> {
                     System.out.print("Ditt Medlems-ID: ");
                     int mId = Integer.parseInt(scanner.nextLine().trim());
@@ -124,6 +139,7 @@ public class LibraryMenu implements CommandLineRunner {
         }
     }
 
+    // Menystyrning och administrativa verktyg för bibliotekarien
     private void librarianMenu() {
         while (true) {
             System.out.println("""
@@ -142,6 +158,7 @@ public class LibraryMenu implements CommandLineRunner {
             String choice = scanner.nextLine().trim();
 
             switch (choice) {
+                // Skapar ett nytt medlemskonto och visar det nya ID-numret
                 case "1" -> {
                     System.out.print("Förnamn: "); String fn = scanner.nextLine().trim();
                     System.out.print("Efternamn: "); String ln = scanner.nextLine().trim();
@@ -152,11 +169,15 @@ public class LibraryMenu implements CommandLineRunner {
                             () -> System.out.println("❌ Kunde inte skapa medlem.")
                     );
                 }
+
+                // Visar samtliga aktiva utlåningar i biblioteket
                 case "2" -> {
                     List<LoanDTO> active = libraryService.getAllActiveLoans();
                     System.out.println("\n--- Alla aktiva lån (" + active.size() + " st) ---");
                     active.forEach(this::printLoan);
                 }
+
+                // Registrerar en ny bok i katalogen
                 case "3" -> {
                     System.out.print("Titel: "); String t = scanner.nextLine().trim();
                     System.out.print("ISBN: "); String i = scanner.nextLine().trim();
@@ -167,6 +188,8 @@ public class LibraryMenu implements CommandLineRunner {
                     if (libraryService.addBook(t, i, y, c, aId, cId)) System.out.println("✅ Bok tillagd!");
                     else System.out.println("❌ Kunde inte lägga till bok.");
                 }
+
+                // Uppdaterar titel och år på en befintlig bok
                 case "4" -> {
                     System.out.print("Bok-ID att redigera: "); int id = Integer.parseInt(scanner.nextLine().trim());
                     System.out.print("Ny titel: "); String t = scanner.nextLine().trim();
@@ -174,11 +197,15 @@ public class LibraryMenu implements CommandLineRunner {
                     if (libraryService.editBook(id, t, y)) System.out.println("✅ Bok uppdaterad!");
                     else System.out.println("❌ Uppdatering misslyckades.");
                 }
+
+                // Tar bort en bok ur sortimentet
                 case "5" -> {
                     System.out.print("Bok-ID att ta bort: "); int id = Integer.parseInt(scanner.nextLine().trim());
                     if (libraryService.deleteBook(id)) System.out.println("✅ Bok raderad!");
                     else System.out.println("❌ Kunde inte radera bok.");
                 }
+
+                // Skapar en författare och returnerar dess ID-nummer
                 case "6" -> {
                     System.out.print("Förnamn: "); String fn = scanner.nextLine().trim();
                     System.out.print("Efternamn: "); String ln = scanner.nextLine().trim();
@@ -189,6 +216,8 @@ public class LibraryMenu implements CommandLineRunner {
                             () -> System.out.println("❌ Fel uppstod när författaren skulle skapas.")
                     );
                 }
+
+                // Ändrar information om en befintlig författare
                 case "7" -> {
                     System.out.print("Författar-ID: "); int aId = Integer.parseInt(scanner.nextLine().trim());
                     System.out.print("Nytt förnamn: "); String fn = scanner.nextLine().trim();
@@ -197,6 +226,8 @@ public class LibraryMenu implements CommandLineRunner {
                     if (libraryService.editAuthor(aId, fn, ln, nat)) System.out.println("✅ Författare uppdaterad!");
                     else System.out.println("❌ Fel uppstod.");
                 }
+
+                // Kopplar en bok till en kategori
                 case "8" -> {
                     System.out.print("Bok-ID: "); int bId = Integer.parseInt(scanner.nextLine().trim());
                     System.out.print("Kategori-ID: "); int cId = Integer.parseInt(scanner.nextLine().trim());
@@ -209,6 +240,7 @@ public class LibraryMenu implements CommandLineRunner {
         }
     }
 
+    // Formaterar och skriver ut en lista med böcker i konsolen
     private void printBooks(List<BookDTO> books) {
         System.out.println("\n----------------- BÖCKER -----------------");
         if (books.isEmpty()) System.out.println("Inga böcker hittades.");
@@ -217,6 +249,7 @@ public class LibraryMenu implements CommandLineRunner {
                 b.categories() != null ? b.categories() : "Inga", b.availableCopies()));
     }
 
+    // Formaterar och skriver ut lånestatus för ett enskilt lån
     private void printLoan(LoanDTO l) {
         String status = l.returnDate() != null ? "Återlämnad (" + l.returnDate() + ")" : (l.isOverdue() ? "⚠️ FÖRSENAD!" : "Aktivt");
         System.out.printf("  - Låne-ID: %d | Bok: \"%s\" (ID: %d) | Medlem: %s (ID: %d) | Förfaller: %s | Status: %s%n",
