@@ -1,11 +1,14 @@
 package user;
 
+// Abstrakt basklass som definierar gemensamma egenskaper för alla användartyper
 public abstract class User {
+    // Gemensamma fält för alla användare
     private int id;
     private String firstName;
     private String lastName;
     private String email;
 
+    // Konstruktor för att initiera grundläggande användardata
     public User(int id, String firstName, String lastName, String email) {
         this.id = id;
         this.firstName = firstName;
@@ -13,12 +16,15 @@ public abstract class User {
         this.email = email;
     }
 
-    public abstract String getRoleDescription(); // Polymorf metod
+    // Abstrakt metod som tvingar subklasser att definiera sin egen rollbeskrivning (polymorfism)
+    public abstract String getRoleDescription();
 
+    // Hjälpmetod för att slå ihop förnamn och efternamn
     public String getFullName() {
         return firstName + " " + lastName;
     }
 
+    // Getters och setters för inkapsling av användaruppgifter
     public int getId() { return id; }
     public String getFirstName() { return firstName; }
     public void setFirstName(String firstName) { this.firstName = firstName; }
