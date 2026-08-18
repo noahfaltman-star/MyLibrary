@@ -2,6 +2,7 @@ package library;
 
 import book.BookDTO;
 import loan.LoanDTO;
+import member.MemberDTO;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
@@ -78,25 +79,31 @@ public class LibraryMenu implements CommandLineRunner {
                     else System.out.println("❌ Boken är slut i lager eller felaktigt ID.");
                 }
                 case "4" -> {
-                    System.out.print("Låne-ID att återlämna: ");
-                    int lId = Integer.parseInt(scanner.nextLine().trim());
-                    if (libraryService.returnBook(lId)) System.out.println("✅ Boken är återlämnad!");
-                    else System.out.println("❌ Kunde inte återlämna (aktivt lån saknas).");
+                    System.out.print("Ditt Medlems-ID: ");
+                    int mId = Integer.parseInt(scanner.nextLine().trim());
+                    System.out.print("Bok-ID att återlämna: ");
+                    int bId = Integer.parseInt(scanner.nextLine().trim());
+                    if (libraryService.returnBook(bId, mId)) System.out.println("✅ Boken är återlämnad!");
+                    else System.out.println("❌ Kunde inte återlämna (inget aktivt lån på denna bok hittades).");
                 }
                 case "5" -> {
-                    System.out.print("Låne-ID att förlänga: ");
-                    int lId = Integer.parseInt(scanner.nextLine().trim());
-                    if (libraryService.extendLoan(lId, 14)) System.out.println("✅ Lånet förlängdes med 14 dagar!");
-                    else System.out.println("❌ Kunde inte förlänga.");
+                    System.out.print("Ditt Medlems-ID: ");
+                    int mId = Integer.parseInt(scanner.nextLine().trim());
+                    System.out.print("Bok-ID att förlänga: ");
+                    int bId = Integer.parseInt(scanner.nextLine().trim());
+                    if (libraryService.extendLoan(bId, mId, 14)) System.out.println("✅ Lånet förlängdes med 14 dagar!");
+                    else System.out.println("❌ Kunde inte förlänga (aktivt lån saknas).");
                 }
                 case "6" -> {
                     System.out.print("Ditt Medlems-ID: ");
                     int mId = Integer.parseInt(scanner.nextLine().trim());
-                    libraryService.getMemberProfile(mId).ifPresentOrElse(m -> {
+                    final int currentMemberId = mId;
+
+                    libraryService.getMemberProfile(currentMemberId).ifPresentOrElse(m -> {
                         System.out.printf("%n📄 PROFIL: %s | E-post: %s | Typ: %s | Status: %s%n",
                                 m.fullName(), m.email(), m.membershipType(), m.status());
-                        System.out.println("Dina lån:");
-                        libraryService.getMemberLoans(mId).forEach(this::printLoan);
+                        System.out.println("Dina aktiva lån:");
+                        libraryService.getActiveMemberLoans(currentMemberId).forEach(this::printLoan);
                     }, () -> System.out.println("Medlem hittades inte."));
                 }
                 case "7" -> {
@@ -139,8 +146,11 @@ public class LibraryMenu implements CommandLineRunner {
                     System.out.print("Förnamn: "); String fn = scanner.nextLine().trim();
                     System.out.print("Efternamn: "); String ln = scanner.nextLine().trim();
                     System.out.print("E-post: "); String em = scanner.nextLine().trim();
-                    if (libraryService.createMember(fn, ln, em)) System.out.println("✅ Medlem skapad!");
-                    else System.out.println("❌ Kunde inte skapa medlem.");
+
+                    libraryService.createMember(fn, ln, em).ifPresentOrElse(
+                            id -> System.out.printf("✅ Medlem skapad! Nytt Medlems-ID: %d%n", id),
+                            () -> System.out.println("❌ Kunde inte skapa medlem.")
+                    );
                 }
                 case "2" -> {
                     List<LoanDTO> active = libraryService.getAllActiveLoans();
@@ -173,8 +183,11 @@ public class LibraryMenu implements CommandLineRunner {
                     System.out.print("Förnamn: "); String fn = scanner.nextLine().trim();
                     System.out.print("Efternamn: "); String ln = scanner.nextLine().trim();
                     System.out.print("Nationalitet: "); String nat = scanner.nextLine().trim();
-                    if (libraryService.addAuthor(fn, ln, nat)) System.out.println("✅ Författare skapad!");
-                    else System.out.println("❌ Fel uppstod.");
+
+                    libraryService.addAuthor(fn, ln, nat).ifPresentOrElse(
+                            id -> System.out.printf("✅ Författare skapad! Författar-ID: %d%n", id),
+                            () -> System.out.println("❌ Fel uppstod när författaren skulle skapas.")
+                    );
                 }
                 case "7" -> {
                     System.out.print("Författar-ID: "); int aId = Integer.parseInt(scanner.nextLine().trim());

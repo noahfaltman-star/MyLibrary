@@ -3,7 +3,6 @@ package library;
 import book.BookDTO;
 import loan.LoanDTO;
 import member.MemberDTO;
-import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,10 +23,9 @@ public class LibraryService {
     }
 
     // ==========================================
-    //LÅNTAGAREN
+    // LÅNTAGAREN
     // ==========================================
 
-    // Se alla / filtrera / söka med Lambdas & Streams
     public List<BookDTO> getAllBooksDTO() {
         String sql = """
             SELECT b.id, b.title, b.isbn, b.year_published, b.available_copies,
@@ -62,38 +60,49 @@ public class LibraryService {
                 .toList();
     }
 
-    // Låna bok
     @Transactional
     public boolean borrowBook(int bookId, int memberId) {
-        int updated = jdbc.update("UPDATE books SET available_copies = available_copies - 1 WHERE id = ? AND available_copies > 0", bookId);
-        if (updated == 0) return false;
+        int updated = jdbc.update(
+                "UPDATE books SET available_copies = available_copies - 1 WHERE id = ? AND available_copies > 0",
+                bookId
+        );
+        if (updated == 0) {
+            return false;
+        }
 
         LocalDate today = LocalDate.now();
-        jdbc.update("INSERT INTO loans (book_id, member_id, loan_date, due_date) VALUES (?, ?, ?, ?)",
-                bookId, memberId, today, today.plusWeeks(2));
+        jdbc.update(
+                "INSERT INTO loans (book_id, member_id, loan_date, due_date) VALUES (?, ?, ?, ?)",
+                bookId, memberId, today, today.plusWeeks(2)
+        );
         return true;
     }
 
-    // Lämna tillbaka bok
     @Transactional
-    public boolean returnBook(int loanId) {
-        String findBookSql = "SELECT book_id FROM loans WHERE id = ? AND return_date IS NULL";
-        List<Integer> bookIds = jdbc.query(findBookSql, (rs, rowNum) -> rs.getInt("book_id"), loanId);
-        if (bookIds.isEmpty()) return false;
+    public boolean returnBook(int bookId, int memberId) {
+        String findLoanSql = "SELECT id FROM loans WHERE book_id = ? AND member_id = ? AND return_date IS NULL";
+        List<Integer> loanIds = jdbc.query(findLoanSql, (rs, rowNum) -> rs.getInt("id"), bookId, memberId);
 
-        int bookId = bookIds.getFirst();
+        if (loanIds.isEmpty()) {
+            return false;
+        }
+
+        int loanId = loanIds.getFirst();
         jdbc.update("UPDATE loans SET return_date = ? WHERE id = ?", LocalDate.now(), loanId);
         jdbc.update("UPDATE books SET available_copies = available_copies + 1 WHERE id = ?", bookId);
         return true;
     }
 
-    // Förlänga lån
-    public boolean extendLoan(int loanId, int extraDays) {
-        String sql = "UPDATE loans SET due_date = DATE_ADD(due_date, INTERVAL ? DAY) WHERE id = ? AND return_date IS NULL";
-        return jdbc.update(sql, extraDays, loanId) > 0;
+    public boolean extendLoan(int bookId, int memberId, int extraDays) {
+        String sql = """
+            UPDATE loans 
+            SET due_date = DATE_ADD(due_date, INTERVAL ? DAY) 
+            WHERE book_id = ? AND member_id = ? AND return_date IS NULL
+        """;
+        int rowsAffected = jdbc.update(sql, extraDays, bookId, memberId);
+        return rowsAffected > 0;
     }
 
-    // Profilsida (info + lån)
     public Optional<MemberDTO> getMemberProfile(int memberId) {
         String sql = "SELECT * FROM members WHERE id = ?";
         List<MemberDTO> members = jdbc.query(sql, (rs, rowNum) -> new MemberDTO(
@@ -112,20 +121,34 @@ public class LibraryService {
 
     public List<LoanDTO> getMemberLoans(int memberId) {
         String sql = """
-            SELECT l.id, l.book_id, b.title AS book_title, l.member_id,
-                   CONCAT(m.first_name, ' ', m.last_name) AS member_name,
-                   l.loan_date, l.due_date, l.return_date
-            FROM loans l
-            JOIN books b ON l.book_id = b.id
-            JOIN members m ON l.member_id = m.id
-            WHERE l.member_id = ?
-        """;
+        SELECT l.id, l.book_id, b.title AS book_title, l.member_id,
+               CONCAT(m.first_name, ' ', m.last_name) AS member_name,
+               l.loan_date, l.due_date, l.return_date
+        FROM loans l
+        JOIN books b ON l.book_id = b.id
+        JOIN members m ON l.member_id = m.id
+        WHERE l.member_id = ? AND l.return_date IS NULL
+    """;
         return jdbc.queryForList(sql, memberId).stream()
                 .map(this::mapToLoanDTO)
                 .toList();
     }
 
-    // Uppdatera profilinfo
+    public List<LoanDTO> getActiveMemberLoans(int memberId) {
+        String sql = """
+        SELECT l.id, l.book_id, b.title AS book_title, l.member_id,
+               CONCAT(m.first_name, ' ', m.last_name) AS member_name,
+               l.loan_date, l.due_date, l.return_date
+        FROM loans l
+        JOIN books b ON l.book_id = b.id
+        JOIN members m ON l.member_id = m.id
+        WHERE l.member_id = ? AND l.return_date IS NULL
+    """;
+        return jdbc.queryForList(sql, memberId).stream()
+                .map(this::mapToLoanDTO)
+                .toList();
+    }
+
     public boolean updateMemberProfile(int memberId, String firstName, String lastName, String email) {
         String sql = "UPDATE members SET first_name = ?, last_name = ?, email = ? WHERE id = ?";
         return jdbc.update(sql, firstName, lastName, email, memberId) > 0;
@@ -135,9 +158,16 @@ public class LibraryService {
     // BIBLIOTEKARIE
     // ==========================================
 
-    public boolean createMember(String firstName, String lastName, String email) {
+    @Transactional
+    public Optional<Integer> createMember(String firstName, String lastName, String email) {
         String sql = "INSERT INTO members (first_name, last_name, email, membership_date, membership_type, status) VALUES (?, ?, ?, ?, 'standard', 'active')";
-        return jdbc.update(sql, firstName, lastName, email, LocalDate.now()) > 0;
+        int rows = jdbc.update(sql, firstName, lastName, email, LocalDate.now());
+
+        if (rows > 0) {
+            Integer newId = jdbc.queryForObject("SELECT LAST_INSERT_ID()", Integer.class);
+            return Optional.ofNullable(newId);
+        }
+        return Optional.empty();
     }
 
     public List<LoanDTO> getAllActiveLoans() {
@@ -158,7 +188,9 @@ public class LibraryService {
     @Transactional
     public boolean addBook(String title, String isbn, int year, int copies, int authorId, int categoryId) {
         String sql = "INSERT INTO books (title, isbn, year_published, total_copies, available_copies) VALUES (?, ?, ?, ?, ?)";
-        jdbc.update(sql, title, isbn, year, copies, copies);
+        // Sätter titel, isbn, år, total_copies och available_copies
+        int rows = jdbc.update(sql, title, isbn, year, copies, copies);
+        if (rows == 0) return false;
 
         Integer bookId = jdbc.queryForObject("SELECT LAST_INSERT_ID()", Integer.class);
         if (bookId != null) {
@@ -177,9 +209,16 @@ public class LibraryService {
         return jdbc.update("DELETE FROM books WHERE id = ?", bookId) > 0;
     }
 
-    public boolean addAuthor(String firstName, String lastName, String nationality) {
-        return jdbc.update("INSERT INTO authors (first_name, last_name, nationality) VALUES (?, ?, ?)",
-                firstName, lastName, nationality) > 0;
+    @Transactional
+    public Optional<Integer> addAuthor(String firstName, String lastName, String nationality) {
+        String sql = "INSERT INTO authors (first_name, last_name, nationality) VALUES (?, ?, ?)";
+        int rows = jdbc.update(sql, firstName, lastName, nationality);
+
+        if (rows > 0) {
+            Integer newId = jdbc.queryForObject("SELECT LAST_INSERT_ID()", Integer.class);
+            return Optional.ofNullable(newId);
+        }
+        return Optional.empty();
     }
 
     public boolean editAuthor(int authorId, String firstName, String lastName, String nationality) {
@@ -192,7 +231,7 @@ public class LibraryService {
     }
 
     // ==========================================
-    // MAPPERS (Streams / Lambdas)
+    // MAPPERS
     // ==========================================
     private BookDTO mapToBookDTO(Map<String, Object> row) {
         return new BookDTO(
